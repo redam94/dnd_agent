@@ -1,0 +1,41 @@
+# Docstring configuration
+style: google  # or google, sphinx
+fix_missing: true
+line_length: 79
+
+# Validation rules
+rules:
+  require_summary: true
+  require_description: false
+  require_param_types: true
+  require_return_type: true
+  min_summary_length: 10
+  capitalize_summary: true
+  end_summary_period: true
+
+# Ignore patterns
+ignore:
+  - "test_*.py"
+  - "*_test.py"
+  - "conftest.py"
+  - "__pycache__"
+
+# Custom templates for missing docstrings
+templates:
+  function: |
+    {summary}
+    
+    Parameters
+    ----------
+    {params}
+    
+    Returns
+    -------
+    {returns}
+  
+  class: |
+    {summary}
+    
+    Attributes
+    ----------
+    {attributes}

@@ -1,0 +1,148 @@
+# Enhanced AI Generation Configuration with Markdown Support
+ai_generation:
+  # Documentation settings
+  documentation:
+    enabled: y
+    provider: openai
+    style: google
+    batch_size: 5
+    cache_ttl_days: 7
+    include_examples: true
+    complexity_threshold: 5
+    
+    # Markdown-specific settings
+    markdown:
+      enabled: true
+      style: github
+      include_source: false
+      include_toc: true
+      include_badges: true
+      formats:
+        - github      # GitHub-flavored markdown
+        - mkdocs      # MkDocs documentation
+        - api_json    # JSON API specification
+        - search_index # Search index for docs
+    
+    # Output formats
+    outputs:
+      - html        # Sphinx HTML
+      - markdown    # Markdown files
+      - pdf         # PDF (optional)
+      - epub        # eBook format (optional)
+    
+  # Test generation settings
+  tests:
+    enabled: y
+    provider: openai
+    framework: pytest
+    coverage_target: 80
+    test_types:
+      - unit
+      - edge_case
+      - exception
+      - mock
+      - integration
+    parallel_generation: true
+    
+  # Common settings
+  common:
+    max_retries: 3
+    timeout_seconds: 30
+    cost_limit_usd: 10.0
+    verbose_logging: false
+    parallel_processing: true
+
+# Documentation structure
+documentation:
+  structure:
+    # Main documentation sections
+    sections:
+      - title: "Getting Started"
+        pages:
+          - installation
+          - quickstart
+          - tutorials
+      
+      - title: "User Guide"
+        pages:
+          - configuration
+          - usage
+          - examples
+      
+      - title: "API Reference"
+        pages:
+          - modules
+          - classes
+          - functions
+      
+      - title: "Developer Guide"
+        pages:
+          - contributing
+          - development
+          - testing
+    
+    # Markdown templates
+    templates:
+      readme: "templates/README.md.jinja2"
+      module: "templates/module.md.jinja2"
+      class: "templates/class.md.jinja2"
+      function: "templates/function.md.jinja2"
+
+# Code quality settings
+quality:
+  linting:
+    max_line_length: 100
+    max_complexity: 10
+    ignore_patterns:
+      - "__pycache__"
+      - ".git"
+      - "*.egg-info"
+      
+  testing:
+    min_coverage: 80
+    fail_under: true
+    show_missing: true
+    
+  documentation:
+    min_docstring_length: 10
+    require_type_hints: true
+    check_examples: true
+    enforce_style: google
+
+# Publishing settings
+publishing:
+  github_pages:
+    enabled: y
+    branch: gh-pages
+    custom_domain: ""
+  
+  readthedocs:
+    enabled: y
+    formats:
+      - html
+      - pdf
+      - epub
+  
+  mkdocs:
+    theme: material
+    docs_dir: .
+    features:
+      - navigation.tabs
+      - search.suggest
+      - content.code.annotate
+
+# Paths configuration  
+paths:
+  source_dir: "src/dnd_agent"
+  test_dir: "tests"
+  docs_dir: "docs"
+  docs_markdown_dir: "docs_markdown"
+  scripts_dir: "scripts"
+  cache_dir: ".cache/ai_generation"
+  templates_dir: "automation/templates"
+
+# API Keys (use environment variables)
+api_keys:
+  openai: "${OPENAI_API_KEY}"
+  anthropic: "${ANTHROPIC_API_KEY}"
+  google: "${GOOGLE_API_KEY}"
