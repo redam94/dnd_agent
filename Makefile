@@ -4,7 +4,7 @@
 .PHONY: coverage quality docker build publish clean-all
 
 # Variables
-PYTHON := uv python python
+PYTHON := uv run python
 PIP := uv pip
 PROJECT := dnd_agent
 SRC_DIR := src
