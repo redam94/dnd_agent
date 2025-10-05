@@ -1,0 +1,64 @@
+{
+        "system_overview": {
+            "panels": [
+                {
+                    "title": "Request Rate",
+                    "query": "rate(system.requests[5m])",
+                    "type": "graph"
+                },
+                {
+                    "title": "Response Time P95",
+                    "query": "histogram_quantile(0.95, system.request_duration_ms)",
+                    "type": "gauge"
+                },
+                {
+                    "title": "Agent Usage",
+                    "query": "sum by (agent) (agent.requests.total)",
+                    "type": "pie"
+                },
+                {
+                    "title": "Error Rate",
+                    "query": "rate(agent.errors.total[5m])",
+                    "type": "graph"
+                }
+            ]
+        },
+        "agent_performance": {
+            "panels": [
+                {
+                    "title": "Agent Response Times",
+                    "query": "avg by (agent) (agent.request.duration_ms)",
+                    "type": "bar"
+                },
+                {
+                    "title": "Cache Hit Rate",
+                    "query": "rate(agent.cache.hits) / (rate(agent.cache.hits) + rate(agent.cache.misses))",
+                    "type": "percentage"
+                },
+                {
+                    "title": "LLM Token Usage",
+                    "query": "sum by (agent) (rate(agent.llm.tokens[5m]))",
+                    "type": "graph"
+                }
+            ]
+        },
+        "combat_metrics": {
+            "panels": [
+                {
+                    "title": "Combat Encounters",
+                    "query": "sum(combat.encounters)",
+                    "type": "counter"
+                },
+                {
+                    "title": "Average Damage",
+                    "query": "avg(combat.damage_dealt)",
+                    "type": "gauge"
+                },
+                {
+                    "title": "Hit/Miss Ratio",
+                    "query": "sum(combat.attacks{hit='true'}) / sum(combat.attacks)",
+                    "type": "percentage"
+                }
+            ]
+        }
+    }

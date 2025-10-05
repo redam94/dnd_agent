@@ -87,6 +87,7 @@ class Neo4jSpatialManager:
 
     def create_map(self, map_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a map node"""
+        print(f"Creating map with data: {map_data}")
         with self.driver.session() as session:
             query = """
             CREATE (m:Map $properties)
@@ -223,10 +224,11 @@ class Neo4jSpatialManager:
 
             # Use peek to check if result exists
             if not result.peek():
+                print("No distance found.")
                 return None
 
             record = result.single()
-
+            print(f"Distance record: {record}")
             if record:
                 # Calculate 3D Euclidean distance
                 dx = record["x2"] - record["x1"]

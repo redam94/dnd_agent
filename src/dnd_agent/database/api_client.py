@@ -13,15 +13,19 @@ class DnD5eAPIClient:
     def close(self):
         self.client.close()
 
-    def get_resource(self, endpoint: str, index: str = None) -> Dict[str, Any]:
+    def get_resource(self, endpoint: str, index: str = None, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Get a resource from the D&D 5e API"""
         if index:
             url = f"{self.base_url}/api/2014/{endpoint}/{index}"
         else:
             url = f"{self.base_url}/api/2014/{endpoint}"
+        
+        if params is None:
+            params = {}
+        
 
         try:
-            response = self.client.get(url)
+            response = self.client.get(url, params=params)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:

@@ -182,17 +182,17 @@ class PostgresVectorManager:
         self, campaign_id: str, query: str, info_type: Optional[str] = None, limit: int = 5
     ) -> List[Dict[str, Any]]:
         """Search campaign info using vector similarity"""
+        print(f"Searching campaign info for query: '{query}'")
         query_embedding = self.get_embedding(query)
+        
         if not query_embedding:
             # Fallback to text search
             return self.search_campaign_info_text(campaign_id, query, info_type, limit)
 
         with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+            
             type_filter = "AND info_type = %s" if info_type else ""
-            params = [campaign_id, query_embedding, limit]
-            if info_type:
-                params.insert(2, info_type)
-
+            
             cur.execute(
                 f"""
                 SELECT id, info_type, title, content, metadata, created_at,
@@ -202,20 +202,18 @@ class PostgresVectorManager:
                 {type_filter}
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
-            """.replace(
-                    "%s::vector", "%s"
-                ).replace(
-                    "<=> %s", "<=> %s::vector"
-                ),
-                [campaign_id] + ([info_type] if info_type else []) + [query_embedding, limit],
+            """,
+                [query_embedding, campaign_id] + ([info_type] if info_type else []) + [query_embedding, limit],
             )
-
-            return [dict(row) for row in cur.fetchall()]
+            result = [dict(row) for row in cur.fetchall()]
+            
+            return result
 
     def search_campaign_info_text(
         self, campaign_id: str, query: str, info_type: Optional[str] = None, limit: int = 5
     ) -> List[Dict[str, Any]]:
         """Search campaign info using text search (fallback)"""
+        print("Fallback to text search for campaign info")
         with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
             type_filter = "AND info_type = %s" if info_type else ""
             params = [campaign_id, f"%{query}%", f"%{query}%", limit]
