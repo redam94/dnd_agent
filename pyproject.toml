@@ -206,3 +206,7 @@ per-file-ignores = [
 server = [
     "fastapi[standard]>=0.118.0",
 ]
+jupyter = [
+    "ipykernel>=6.30.1",
+    "ipywidgets>=8.1.7",
+]
