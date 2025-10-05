@@ -42,7 +42,12 @@ async def main() -> None:
 
     # Build the campaign system
     orchestrator = create_campaign_system(deps, model_config)
-
+    # Create an AgentRequest for the orchestrator
+    request = AgentRequest(
+        agent_type=AgentType.ORCHESTRATOR,
+        action="handle_user_input",
+        parameters={},
+    )
     while True:
         user_input = input("\nEnter your command (or 'exit' to quit): ")
         if user_input.lower() == 'exit':
@@ -50,15 +55,11 @@ async def main() -> None:
             break
 
         # Create an AgentRequest for the orchestrator
-        request = AgentRequest(
-            agent_type=AgentType.ORCHESTRATOR,
-            action="handle_user_input",
-            parameters={"user_input": user_input},
-        )
-
+        request.parameters["user_input"] = user_input
+        request.parameters['previous_responses'] = []
         # Process the request using the orchestrator
         response = await orchestrator.process(request)
-
+        request.parameters['previous_responses'].append({"user_input": user_input, "response": response.message})
         # Print the response message
         console.print("\nResponse from Orchestrator:")
         console.print(Markdown(response.message))

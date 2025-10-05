@@ -58,6 +58,13 @@ class DMOrchestratorAgent(BaseAgent):
         agent.tool(self.delegate_to_agent, retries=3)
         agent.tool(self.combine_responses, retries=3)
         agent.tool(self.get_game_state, retries=3)
+
+        # Register DM chat tool for simple conversation handling.  This
+        # tool records player messages, generates a basic DM reply and
+        # stores the response in chat history.  It can be invoked via
+        # ``dm_chat(campaign_id, session_id, message)`` and returns
+        # the DM's reply as a string.  See ``dm_chat`` method below.
+        agent.tool(self.dm_chat, name="dm_chat")
         return agent
 
     async def delegate_to_agent(self, ctx: RunContext, agent_type: AgentType, action: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
@@ -70,11 +77,7 @@ class DMOrchestratorAgent(BaseAgent):
         agent = self.sub_agents.get(agent_type)
         if agent is None:
             return {"success": False, "data": None, "message": f"Unknown agent type: {agent_type}"}
-        if ctx is not None:
-            
-            request = AgentRequest(agent_type=agent_type, action=action, parameters=parameters, context=ctx.deps.current_context if hasattr(ctx.deps, "current_context") else None)
-        else:
-            request = AgentRequest(agent_type=agent_type, action=action, parameters=parameters, context=None)
+        request = AgentRequest(agent_type=agent_type, action=action, parameters=parameters, context=ctx.deps.current_context if hasattr(ctx.deps, "current_context") else None)
         response: AgentResponse = await agent.process(request)
         return {
             "success": response.success,
@@ -97,3 +100,38 @@ class DMOrchestratorAgent(BaseAgent):
             if hasattr(agent, "get_state"):
                 state[atype.value] = await agent.get_state()  # type: ignore[func-returns-value]
         return state
+
+    async def dm_chat(self, ctx: RunContext, campaign_id: str, session_id: str, message: str) -> str:
+        """Handle a chat message directed to the DM.
+
+        This method implements a simple DM chat bot.  It appends the
+        player's message to the chat history, composes a basic
+        response, records the response as a DM message and then
+        returns it to the caller.  For a more sophisticated
+        experience, you could replace the static reply with a call
+        to a language model using the campaign context.
+
+        :param ctx: run context providing dependencies and chat history
+        :param campaign_id: identifier for the campaign
+        :param session_id: identifier for the session or scene
+        :param message: the player's input message
+        :returns: the DM's reply
+        """
+        # Import chat memory tools lazily to avoid circular dependencies
+        from dnd_agent.tools import save_chat_message
+
+        # Persist the player's message
+        await save_chat_message(ctx, campaign_id=campaign_id, session_id=session_id, role="player", content=message)
+
+        # Compose a simple response.  In future this could use a
+        # language model such as OpenAIChatModel or incorporate
+        # campaign lore.  For now we produce a friendly echo.
+        dm_reply = (
+            "As the dungeon master, I acknowledge your action: "
+            f"'{message}'. I will react accordingly as the story unfolds."
+        )
+
+        # Record the DM's response in chat history
+        await save_chat_message(ctx, campaign_id=campaign_id, session_id=session_id, role="dm", content=dm_reply)
+
+        return dm_reply

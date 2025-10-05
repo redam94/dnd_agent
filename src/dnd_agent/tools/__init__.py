@@ -42,6 +42,15 @@ from .campaign_storage import (
     recall_chat_history,
 )
 
+# Chat memory tools provide a lightweight in‑memory chat history for DM
+# conversation.  These are exported here so agents and the orchestrator
+# can easily record and retrieve chat messages.
+from .chat_memory import (
+    save_chat_message,
+    get_chat_history,
+    search_chat_history,
+)
+
 __all__ = [
     # graph
     "store_campaign_entity",
@@ -64,4 +73,9 @@ __all__ = [
     "save_campaign_info",
     "search_campaign_info",
     "recall_chat_history",
+
+    # chat memory
+    "save_chat_message",
+    "get_chat_history",
+    "search_chat_history",
 ]
