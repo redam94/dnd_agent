@@ -1,46 +1,25 @@
 """
 Neo4j Spatial manager for DnD Agent
-=================================
+===================================
 
-All methods related to Neo4j graph database operations with spatial awareness.
+This module provides an abstraction over the Neo4j driver for common
+operations used by the DnD agent.  It encapsulates the logic for
+creating maps, locations and entities, positioning them in a spatial
+graph and querying distances and relationships.  The manager is
+designed to be stateless; each method opens a new session on the
+driver and cleans up after itself.
 
-NEO4J WARNING REFERENCE GUIDE
-=============================
+Two convenience helpers are provided: ``create_map_location``
+conveniently creates a map and links it to a location (if provided),
+and ``create_location_with_position`` creates a location on an
+existing map at a given coordinate.  The manager also exposes
+``create_relationship`` for arbitrary relationships between nodes.
 
-If you see warnings like these, they are SAFE TO IGNORE:
-
-1. "warn: unknown label"
-   - Examples: NPC, Monster, Character, Location, Map
-   - Cause: Label doesn't exist in database yet
-   - Fix: Create entities with that label (automatic)
-
-2. "warn: unknown property key"
-   - Examples: current_map_id, x, y, z, name
-   - Cause: Property hasn't been set on any node yet
-   - Fix: Create nodes with those properties (automatic)
-
-3. "warn: unknown relationship type"
-   - Examples: LOCATED_IN, CONNECTED_TO, ON_MAP, KNOWS
-   - Cause: Relationship type doesn't exist yet
-   - Fix: Create relationships of that type (automatic)
-
-WHY DO THESE WARNINGS APPEAR?
-Neo4j uses a schema-less approach. When you query for something that doesn't
-exist yet, Neo4j can't optimize the query and warns you. Once data exists,
-the warnings stop. They DO NOT indicate errors or problems.
-
-HOW TO VERIFY EVERYTHING IS WORKING:
-Run the script twice. On the second run, you'll see FAR FEWER or NO warnings
-because the schema now exists with actual data.
-
-TO SUPPRESS WARNINGS (Optional):
-Add to your Neo4j connection:
-    import warnings
-    warnings.filterwarnings('ignore', category=UserWarning)
-
-However, this will suppress ALL warnings, not just Neo4j's schema warnings.
-We recommend keeping warnings visible during development.
+You may suppress Neo4j schema warnings during development by calling
+``suppress_neo4j_warnings`` before performing operations.
 """
+
+from __future__ import annotations
 
 import math
 import warnings
@@ -51,72 +30,120 @@ from neo4j import GraphDatabase
 __all__ = ["Neo4jSpatialManager", "suppress_neo4j_warnings"]
 
 
-def suppress_neo4j_warnings():
-    """
-    Optional: Suppress Neo4j schema warnings about unknown labels/properties/relationships.
-
-    These warnings are informational and safe to ignore. They appear when:
-    - Database is empty or newly created
-    - Querying for labels/properties/relationships that don't exist yet
-
-    Call this function at the start of your script if you want a cleaner output.
-
-    Note: This suppresses ALL UserWarnings from the neo4j module, not just schema warnings.
-    """
+def suppress_neo4j_warnings() -> None:
+    """Optionally suppress Neo4j schema warnings for a cleaner output."""
     warnings.filterwarnings("ignore", category=UserWarning, module="neo4j")
     print("ℹ️  Neo4j schema warnings suppressed for cleaner output.\n")
 
 
 class Neo4jSpatialManager:
-    """Manages Neo4j graph database operations with spatial awareness"""
+    """Manages Neo4j graph database operations with spatial awareness."""
 
-    def __init__(self, uri: str, user: str, password: str):
+    def __init__(self, uri: str, user: str, password: str) -> None:
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self._create_spatial_indexes()
 
-    def _create_spatial_indexes(self):
-        """Create indexes for spatial queries"""
+    def _create_spatial_indexes(self) -> None:
+        """Create common indexes used by spatial queries."""
         with self.driver.session() as session:
-            # Create indexes for common queries
             session.run("CREATE INDEX location_name IF NOT EXISTS FOR (n:Location) ON (n.name)")
             session.run("CREATE INDEX character_name IF NOT EXISTS FOR (n:Character) ON (n.name)")
             session.run("CREATE INDEX map_id IF NOT EXISTS FOR (n:Map) ON (n.map_id)")
 
-    def close(self):
+    def close(self) -> None:
+        """Close the underlying Neo4j driver."""
         self.driver.close()
 
+    # ------------------------------------------------------------------
+    # Map creation
+    # ------------------------------------------------------------------
     def create_map(self, map_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a map node"""
-        print(f"Creating map with data: {map_data}")
+        """Create a map node.  Returns the node properties if created."""
         with self.driver.session() as session:
             query = """
             CREATE (m:Map $properties)
             RETURN m
             LIMIT 1
             """
+            map_data['name'] = map_data.get('map_name', 'Unnamed Map')
             result = session.run(query, properties=map_data)
-
             if not result.peek():
                 return {}
-
             record = result.single()
             return dict(record["m"]) if record else {}
 
+    def create_map_location(
+        self,
+        map_id: str,
+        map_name: str,
+        description: str,
+        grid_width: int,
+        grid_height: int,
+        grid_size: int = 5,
+        location_name: Optional[str] = None,
+    ) -> bool:
+        """Create a map node and optionally link it to an existing location.
+
+        If ``location_name`` is provided and a ``Location`` node with that
+        name exists, a ``HAS_MAP`` relationship will be created from the
+        location to the new map.  Returns ``True`` when the map is
+        created successfully; otherwise returns ``False``.
+        """
+        # Create the map node
+        map_data = {
+            "map_id": map_id,
+            "map_name": map_name,
+            "description": description,
+            "grid_width": grid_width,
+            "grid_height": grid_height,
+            "grid_size": grid_size,
+        }
+        created_map = self.create_map(map_data)
+        if not created_map:
+            return False
+        # Optionally link to location
+        if location_name:
+            try:
+                self.create_relationship(
+                    from_node_label="Location",
+                    from_node_property="name",
+                    from_node_value=location_name,
+                    to_node_label="Map",
+                    to_node_property="map_id",
+                    to_node_value=map_id,
+                    relationship_type="HAS_MAP",
+                    properties={},
+                )
+            except Exception:
+                # Relationship creation failures should not abort map creation
+                pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Location creation
+    # ------------------------------------------------------------------
     def create_location_with_position(
         self,
         location_data: Dict[str, Any],
         map_id: str,
         position: Optional[Tuple[float, float, float]] = None,
     ) -> Dict[str, Any]:
-        """Create a location with optional position on a map"""
+        """Create a location with optional position on a map.
+
+        The location will be linked to the map via an ``ON_MAP``
+        relationship.  If ``position`` is provided, the location's
+        ``x``, ``y`` and ``z`` coordinates are set accordingly.  Returns
+        the node properties when created, or an empty dict if the
+        operation fails.
+        """
         with self.driver.session() as session:
-            # Add position and map reference
+            # Add map reference and position to the location data
+            location_data = dict(location_data)
             location_data["map_id"] = map_id
             if position:
                 location_data["x"] = position[0]
                 location_data["y"] = position[1]
                 location_data["z"] = position[2] if len(position) > 2 else 0.0
-
             query = """
             MATCH (m:Map {map_id: $map_id})
             WITH m LIMIT 1
@@ -125,13 +152,14 @@ class Neo4jSpatialManager:
             RETURN l
             """
             result = session.run(query, map_id=map_id, location_data=location_data)
-
             if not result.peek():
                 return {}
-
             record = result.single()
             return dict(record["l"]) if record else {}
 
+    # ------------------------------------------------------------------
+    # Entity positioning
+    # ------------------------------------------------------------------
     def set_entity_position(
         self,
         entity_type: str,
@@ -139,19 +167,23 @@ class Neo4jSpatialManager:
         x: float,
         y: float,
         z: float = 0.0,
-        map_id: str = None,
-        location_name: str = None,
+        map_id: Optional[str] = None,
+        location_name: Optional[str] = None,
     ) -> bool:
-        """Set the position of an entity (Character, NPC, Monster, etc.)"""
-        with self.driver.session() as session:
-            # Build position data - always include map_id if provided
-            position_data = {"x": x, "y": y, "z": z}
+        """Set the position of an entity (Character, NPC, Monster, etc.).
 
-            # If map_id is provided, set it; if location_name is provided, get map_id from location
+        The entity's coordinates (``x``, ``y``, ``z``) are updated, and
+        the ``current_map_id`` property is set to the supplied map or to
+        the map inferred from ``location_name``.  If ``location_name``
+        is provided, a ``LOCATED_IN`` relationship is created.
+        Returns ``True`` if the update succeeds.
+        """
+        with self.driver.session() as session:
+            position_data = {"x": x, "y": y, "z": z}
+            # Determine map from arguments
             if map_id:
                 position_data["current_map_id"] = map_id
             elif location_name:
-                # Get map_id from location
                 map_query = (
                     "MATCH (l:Location {name: $location_name}) RETURN l.map_id as map_id LIMIT 1"
                 )
@@ -159,9 +191,7 @@ class Neo4jSpatialManager:
                 map_record = map_result.single()
                 if map_record and map_record["map_id"]:
                     position_data["current_map_id"] = map_record["map_id"]
-
-            # Update entity with position using label matching
-            # Add LIMIT 1 to ensure single result
+            # Update entity coordinates and map reference
             query = """
             MATCH (e {name: $entity_name})
             WHERE $entity_type IN labels(e)
@@ -169,17 +199,14 @@ class Neo4jSpatialManager:
             WITH e
             LIMIT 1
             """
-
-            # If location specified, create relationship
+            # If location specified, create a LOCATED_IN relationship
             if location_name:
                 query += """
                 MATCH (l:Location {name: $location_name})
                 MERGE (e)-[r:LOCATED_IN]->(l)
                 SET r.since = timestamp()
                 """
-
             query += " RETURN e"
-
             result = session.run(
                 query,
                 entity_name=entity_name,
@@ -187,20 +214,19 @@ class Neo4jSpatialManager:
                 position_data=position_data,
                 location_name=location_name,
             )
-
-            # Use peek() to check if result exists without consuming it
             if result.peek():
                 result.consume()
                 return True
             return False
 
+    # ------------------------------------------------------------------
+    # Distance and range queries
+    # ------------------------------------------------------------------
     def calculate_distance(
         self, entity1_type: str, entity1_name: str, entity2_type: str, entity2_name: str
     ) -> Optional[float]:
-        """Calculate distance between two entities in feet"""
+        """Calculate the 3D distance between two entities in feet."""
         with self.driver.session() as session:
-            # Use dynamic label matching to handle any entity type
-            # Add LIMIT 1 to ensure single result per entity
             query = """
             MATCH (e1 {name: $entity1_name})
             WHERE $entity1_type IN labels(e1)
@@ -208,7 +234,7 @@ class Neo4jSpatialManager:
             MATCH (e2 {name: $entity2_name})
             WHERE $entity2_type IN labels(e2)
             WITH e1, e2 LIMIT 1
-            WHERE e1.x IS NOT NULL AND e1.y IS NOT NULL 
+            WHERE e1.x IS NOT NULL AND e1.y IS NOT NULL
               AND e2.x IS NOT NULL AND e2.y IS NOT NULL
               AND coalesce(e1.current_map_id, '') = coalesce(e2.current_map_id, '')
             RETURN e1.x as x1, e1.y as y1, coalesce(e1.z, 0) as z1,
@@ -221,36 +247,31 @@ class Neo4jSpatialManager:
                 entity2_name=entity2_name,
                 entity2_type=entity2_type,
             )
-
-            # Use peek to check if result exists
             if not result.peek():
-                print("No distance found.")
                 return None
-
             record = result.single()
-            print(f"Distance record: {record}")
             if record:
-                # Calculate 3D Euclidean distance
                 dx = record["x2"] - record["x1"]
                 dy = record["y2"] - record["y1"]
                 dz = record["z2"] - record["z1"]
-                distance = math.sqrt(dx**2 + dy**2 + dz**2)
+                distance = math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
                 return round(distance, 2)
             return None
 
     def get_entities_in_range(
-        self, entity_type: str, entity_name: str, range_feet: float, target_types: List[str] = None
+        self,
+        entity_type: str,
+        entity_name: str,
+        range_feet: float,
+        target_types: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Get all entities within range of a given entity"""
+        """Get all entities within a certain range of a given entity."""
         with self.driver.session() as session:
-            # Build query with dynamic label matching
             if target_types:
-                # Match nodes with any of the target types
                 type_conditions = " OR ".join([f"'{t}' IN labels(e2)" for t in target_types])
                 target_filter = f"AND ({type_conditions})"
             else:
                 target_filter = ""
-
             query = f"""
             MATCH (e1 {{name: $entity_name}})
             WHERE $entity_type IN labels(e1)
@@ -261,8 +282,7 @@ class Neo4jSpatialManager:
               AND coalesce(e1.current_map_id, '') = coalesce(e2.current_map_id, '')
               {target_filter}
             WITH e1, e2,
-                 sqrt((e2.x - e1.x)^2 + (e2.y - e1.y)^2 + 
-                      (coalesce(e2.z, 0) - coalesce(e1.z, 0))^2) as distance
+                 sqrt((e2.x - e1.x)^2 + (e2.y - e1.y)^2 + (coalesce(e2.z, 0) - coalesce(e1.z, 0))^2) as distance
             WHERE distance <= $range_feet
             RETURN e2, labels(e2) as entity_type, distance
             ORDER BY distance
@@ -270,20 +290,19 @@ class Neo4jSpatialManager:
             result = session.run(
                 query, entity_name=entity_name, entity_type=entity_type, range_feet=range_feet
             )
-
-            entities = []
+            entities: List[Dict[str, Any]] = []
             for record in result:
                 entity_dict = dict(record["e2"])
-                entity_dict["entity_type"] = (
-                    record["entity_type"][0] if record["entity_type"] else "Unknown"
-                )
+                entity_dict["entity_type"] = record["entity_type"][0] if record["entity_type"] else "Unknown"
                 entity_dict["distance"] = round(record["distance"], 2)
                 entities.append(entity_dict)
-
             return entities
 
+    # ------------------------------------------------------------------
+    # Scene queries and graph operations
+    # ------------------------------------------------------------------
     def get_location_scene(self, location_name: str) -> Dict[str, Any]:
-        """Get detailed scene information for a location"""
+        """Return detailed scene information for a location."""
         with self.driver.session() as session:
             query = """
             MATCH (l:Location {name: $location_name})
@@ -303,13 +322,9 @@ class Neo4jSpatialManager:
                    m.name as map_name
             """
             result = session.run(query, location_name=location_name)
-
-            # Check if result exists
             if not result.peek():
                 return {}
-
             record = result.single()
-
             if record:
                 location = dict(record["l"])
                 return {
@@ -325,17 +340,16 @@ class Neo4jSpatialManager:
         location1: str,
         location2: str,
         connection_type: str = "CONNECTED_TO",
-        distance: float = None,
-        description: str = None,
+        distance: Optional[float] = None,
+        description: Optional[str] = None,
     ) -> bool:
-        """Create a connection between two locations"""
+        """Create a connection between two locations."""
         with self.driver.session() as session:
-            properties = {}
-            if distance:
+            properties: Dict[str, Any] = {}
+            if distance is not None:
                 properties["distance"] = distance
             if description:
                 properties["description"] = description
-
             query = f"""
             MATCH (l1:Location {{name: $location1}})
             WITH l1 LIMIT 1
@@ -347,7 +361,6 @@ class Neo4jSpatialManager:
             result = session.run(
                 query, location1=location1, location2=location2, properties=properties
             )
-
             if result.peek():
                 result.consume()
                 return True
@@ -356,7 +369,7 @@ class Neo4jSpatialManager:
     def get_path_between_locations(
         self, start_location: str, end_location: str
     ) -> Optional[List[str]]:
-        """Find shortest path between two locations"""
+        """Find the shortest path between two locations."""
         with self.driver.session() as session:
             query = """
             MATCH path = shortestPath(
@@ -366,15 +379,16 @@ class Neo4jSpatialManager:
             LIMIT 1
             """
             result = session.run(query, start=start_location, end=end_location)
-
             if not result.peek():
                 return None
-
             record = result.single()
             return record["path"] if record else None
 
+    # ------------------------------------------------------------------
+    # Generic operations
+    # ------------------------------------------------------------------
     def create_node(self, label: str, properties: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a node in the graph"""
+        """Create a node with the given label and properties."""
         with self.driver.session() as session:
             query = f"""
             CREATE (n:{label} $properties)
@@ -382,10 +396,8 @@ class Neo4jSpatialManager:
             LIMIT 1
             """
             result = session.run(query, properties=properties)
-
             if not result.peek():
                 return {}
-
             record = result.single()
             return dict(record["n"]) if record else {}
 
@@ -398,9 +410,9 @@ class Neo4jSpatialManager:
         to_node_property: str,
         to_node_value: Any,
         relationship_type: str,
-        properties: Dict[str, Any] = None,
+        properties: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Create a relationship between two nodes"""
+        """Create a relationship between two nodes."""
         with self.driver.session() as session:
             props = properties or {}
             query = f"""
@@ -412,23 +424,24 @@ class Neo4jSpatialManager:
             RETURN r
             """
             result = session.run(
-                query, from_value=from_node_value, to_value=to_node_value, properties=props
+                query,
+                from_value=from_node_value,
+                to_value=to_node_value,
+                properties=props,
             )
-
-            # Check if result exists
             if result.peek():
                 result.consume()
                 return True
             return False
 
-    def query_graph(self, cypher_query: str, parameters: Dict[str, Any] = None) -> List[Dict]:
-        """Execute a custom Cypher query"""
+    def query_graph(self, cypher_query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Execute an arbitrary Cypher query and return the results."""
         with self.driver.session() as session:
             result = session.run(cypher_query, parameters or {})
             return [dict(record) for record in result]
 
     def entity_exists(self, label: str, name: str) -> bool:
-        """Check if an entity with the given label and name already exists"""
+        """Check whether an entity with the given label and name exists."""
         with self.driver.session() as session:
             query = f"""
             MATCH (n:{label} {{name: $name}})
@@ -440,37 +453,29 @@ class Neo4jSpatialManager:
             return record["exists"] if record else False
 
     def get_database_summary(self) -> Dict[str, Any]:
-        """Get a summary of the database contents"""
+        """Return basic statistics about the database contents."""
         with self.driver.session() as session:
-            # Count total nodes
             total_nodes_result = session.run("MATCH (n) RETURN COUNT(n) as count")
             total_nodes = total_nodes_result.single()["count"]
-
-            # Count total relationships
             total_rels_result = session.run("MATCH ()-[r]->() RETURN COUNT(r) as count")
             total_rels = total_rels_result.single()["count"]
-
-            # Count nodes by label
             node_counts_result = session.run(
                 """
                 MATCH (n)
                 UNWIND labels(n) as label
                 RETURN label, COUNT(*) as count
                 ORDER BY count DESC
-            """
+                """
             )
             node_counts = {record["label"]: record["count"] for record in node_counts_result}
-
-            # Count relationships by type
             rel_counts_result = session.run(
                 """
                 MATCH ()-[r]->()
                 RETURN type(r) as type, COUNT(*) as count
                 ORDER BY count DESC
-            """
+                """
             )
             rel_counts = {record["type"]: record["count"] for record in rel_counts_result}
-
             return {
                 "total_nodes": total_nodes,
                 "total_relationships": total_rels,
@@ -479,7 +484,7 @@ class Neo4jSpatialManager:
             }
 
     def get_all_entities_by_type(self, entity_type: str, limit: int = 20) -> List[Dict[str, Any]]:
-        """Get all entities of a specific type"""
+        """Return all entities of a given type up to a specified limit."""
         with self.driver.session() as session:
             query = f"""
             MATCH (n:{entity_type})

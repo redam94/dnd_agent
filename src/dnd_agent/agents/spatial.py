@@ -22,6 +22,8 @@ from dnd_agent.tools import (
     get_entities_in_range,
     generate_scene_description,
     connect_locations,
+    create_location,
+    move_entity_to_location,
 )
 
 
@@ -43,10 +45,12 @@ class SpatialAgent(BaseAgent):
             retries=2,
         )
         # Register spatial tools
-        agent.tool(create_map_location)
-        agent.tool(set_entity_position)
-        agent.tool(calculate_distance)
-        agent.tool(get_entities_in_range)
-        agent.tool(generate_scene_description)
-        agent.tool(connect_locations)
+        agent.tool(create_map_location, name="create_map")
+        agent.tool(create_location, name="create_location")
+        agent.tool(set_entity_position, name="set_position")
+        agent.tool(move_entity_to_location, name="move_to_location")
+        agent.tool(calculate_distance, name="distance")
+        agent.tool(get_entities_in_range, name="entities_in_range")
+        agent.tool(generate_scene_description, name="describe_scene")
+        agent.tool(connect_locations, name="connect_locations")
         return agent

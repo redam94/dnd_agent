@@ -20,7 +20,6 @@ from dnd_agent.models.agent_deps import CampaignDeps
 
 
 async def _create_neo4j_manager() -> Neo4jSpatialManager:
-    print("Creating Neo4jSpatialManager")
     return Neo4jSpatialManager(
         uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
         user=os.getenv("NEO4J_USER", "neo4j"),
@@ -36,18 +35,68 @@ async def create_map_location(
     grid_width: int,
     grid_height: int,
     grid_size: int = 5,
+    location_name: Optional[str] = None,
 ) -> str:
-    """Create a new map node and associate it with a location entity."""
+    """Create a new map node and optionally link it to a location entity.
+
+    The ``map_id`` and ``map_name`` identify the new map. ``description``
+    describes the map contents, and ``grid_width``, ``grid_height`` and
+    ``grid_size`` define its dimensions. If ``location_name`` is provided
+    a relationship will be created from the corresponding ``Location`` node
+    to the new ``Map`` node using the ``HAS_MAP`` relationship.  Linking
+    maps to locations allows callers to navigate between them in the graph.
+
+    Returns a human‑friendly status message indicating success or failure.
+    """
     try:
         manager = await _create_neo4j_manager()
-        success = manager.create_map(dict(
-            map_id=map_id,
-            map_name=map_name,
-            description=description,
-            grid_width=grid_width,
-            grid_height=grid_height,
-            grid_size=grid_size,)
-        )
+        # Attempt to create the map using the available method on the manager.
+        try:
+            # Older versions of Neo4jSpatialManager expose create_map() which
+            # expects a single dictionary of map properties.  Newer versions
+            # may offer create_map_location() which takes explicit kwargs.  We
+            # detect and use whichever is available.
+            if hasattr(manager, "create_map_location"):
+                success = manager.create_map_location(
+                    map_id=map_id,
+                    map_name=map_name,
+                    description=description,
+                    grid_width=grid_width,
+                    grid_height=grid_height,
+                    grid_size=grid_size,
+                )
+            else:
+                # create_map returns a dict when creation succeeds.
+                result = manager.create_map(
+                    dict(
+                        map_id=map_id,
+                        map_name=map_name,
+                        description=description,
+                        grid_width=grid_width,
+                        grid_height=grid_height,
+                        grid_size=grid_size,
+                    )
+                )
+                success = bool(result)
+        except Exception:
+            success = False
+
+        # If map creation succeeded and a location name was provided, link them.
+        if success and location_name:
+            try:
+                manager.create_relationship(
+                    from_node_label="Location",
+                    from_node_property="name",
+                    from_node_value=location_name,
+                    to_node_label="Map",
+                    to_node_property="map_id",
+                    to_node_value=map_id,
+                    relationship_type="HAS_MAP",
+                    properties={},
+                )
+            except Exception:
+                # Ignore relationship failures but continue closing the manager
+                pass
         manager.close()
         if success:
             return f"✅ Created map '{map_name}' ({map_id})"
@@ -78,6 +127,36 @@ async def set_entity_position(
             map_id=map_id,
             location_name=location_name,
         )
+        # If the position was updated, also record the explicit spatial relationships.
+        if success:
+            try:
+                # Link the entity to its map via an ON_MAP relationship if a map_id is provided
+                if map_id:
+                    manager.create_relationship(
+                        from_node_label=entity_type,
+                        from_node_property="name",
+                        from_node_value=entity_name,
+                        to_node_label="Map",
+                        to_node_property="map_id",
+                        to_node_value=map_id,
+                        relationship_type="ON_MAP",
+                        properties={},
+                    )
+                # Link the entity to a specific location via an AT_LOCATION relationship
+                if location_name:
+                    manager.create_relationship(
+                        from_node_label=entity_type,
+                        from_node_property="name",
+                        from_node_value=entity_name,
+                        to_node_label="Location",
+                        to_node_property="name",
+                        to_node_value=location_name,
+                        relationship_type="AT_LOCATION",
+                        properties={},
+                    )
+            except Exception:
+                # Ignore failures when creating relationships
+                pass
         manager.close()
         if success:
             pos_str = f"({x}, {y}, {z})" if z is not None else f"({x}, {y})"
@@ -213,3 +292,147 @@ async def connect_locations(
         return f"❌ Failed to connect locations. Make sure both locations exist."
     except Exception as exc:  # noqa: BLE001
         return f"❌ Error connecting locations: {exc}"
+
+
+# -----------------------------------------------------------------------------
+# Location creation
+# -----------------------------------------------------------------------------
+async def create_location(
+    ctx: RunContext[CampaignDeps],
+    location_name: str,
+    map_id: str,
+    description: str,
+    location_type: Optional[str] = None,
+    x: Optional[float] = None,
+    y: Optional[float] = None,
+    z: Optional[float] = None,
+) -> str:
+    """Create a new location on a given map with optional position.
+
+    This helper wraps :meth:`Neo4jSpatialManager.create_location_with_position` and
+    returns a user‑friendly message.  At minimum you must specify a
+    ``location_name`` and the ``map_id`` of the map it belongs to.  A
+    description and an optional ``location_type`` can be provided to
+    enrich the node.  If ``x`` and ``y`` (and optionally ``z``) are
+    provided, the location will be assigned a precise position on the
+    map.  Coordinates are measured in feet.
+
+    When successful, a ``Location`` node is created with the supplied
+    properties and an ``ON_MAP`` relationship is established to the map.
+    On failure, a short error message is returned.
+    """
+    try:
+        manager = await _create_neo4j_manager()
+        location_data: Dict[str, Any] = {
+            "name": location_name,
+            "description": description,
+        }
+        if location_type:
+            location_data["location_type"] = location_type
+        # Determine whether to include a position tuple
+        position: Optional[tuple] = None
+        if x is not None and y is not None:
+            # If z is omitted, default to 0.0
+            position = (x, y, z if z is not None else 0.0)
+
+        try:
+            result = manager.create_location_with_position(
+                location_data=location_data, map_id=map_id, position=position
+            )
+            success = bool(result)
+        except Exception:
+            success = False
+        manager.close()
+        if success:
+            pos_desc = (
+                f" at ({x}, {y}{f', {z}' if z is not None else ''})"
+                if position
+                else ""
+            )
+            return f"✅ Created location '{location_name}' on map {map_id}{pos_desc}"
+        return f"❌ Failed to create location '{location_name}'. Make sure the map exists."
+    except Exception as exc:  # noqa: BLE001
+        return f"Error creating location: {exc}"
+
+
+# -----------------------------------------------------------------------------
+# Move entity into a location
+# -----------------------------------------------------------------------------
+async def move_entity_to_location(
+    ctx: RunContext[CampaignDeps],
+    entity_type: str,
+    entity_name: str,
+    location_name: str,
+) -> str:
+    """Move an existing entity into a location, adopting that location's position.
+
+    This function looks up the specified location's coordinates and then calls
+    ``Neo4jSpatialManager.set_entity_position`` to update the entity.  After
+    setting the position, it also establishes the appropriate ``AT_LOCATION`` and
+    ``ON_MAP`` relationships (delegated to ``set_entity_position`` logic).
+
+    Use this when you want to move a character, NPC or other entity into a
+    location rather than specifying explicit coordinates.  If the location
+    does not have a position, the entity is placed at (0, 0, 0).
+    """
+    try:
+        manager = await _create_neo4j_manager()
+        # Fetch the location's scene to obtain its position and current map
+        scene = manager.get_location_scene(location_name)
+        if not scene or "location" not in scene:
+            manager.close()
+            return f"❌ Location '{location_name}' not found."
+        location_data = scene["location"]
+        # Extract coordinates if available, otherwise default to 0.0
+        x = location_data.get("x")
+        y = location_data.get("y")
+        z = location_data.get("z")
+        # Provide defaults if any coordinate is missing
+        x = float(x) if x is not None else 0.0
+        y = float(y) if y is not None else 0.0
+        z = float(z) if z is not None else 0.0
+        # Call the manager to update the entity's position
+        success = manager.set_entity_position(
+            entity_type=entity_type,
+            entity_name=entity_name,
+            x=x,
+            y=y,
+            z=z,
+            map_id=location_data.get("map_id"),
+            location_name=location_name,
+        )
+        # Use our linking logic on success
+        if success:
+            try:
+                # Link entity to map
+                map_id = location_data.get("map_id")
+                if map_id:
+                    manager.create_relationship(
+                        from_node_label=entity_type,
+                        from_node_property="name",
+                        from_node_value=entity_name,
+                        to_node_label="Map",
+                        to_node_property="map_id",
+                        to_node_value=map_id,
+                        relationship_type="ON_MAP",
+                        properties={},
+                    )
+                # Link entity to location
+                manager.create_relationship(
+                    from_node_label=entity_type,
+                    from_node_property="name",
+                    from_node_value=entity_name,
+                    to_node_label="Location",
+                    to_node_property="name",
+                    to_node_value=location_name,
+                    relationship_type="AT_LOCATION",
+                    properties={},
+                )
+            except Exception:
+                pass
+        manager.close()
+        if success:
+            return f"✅ Moved {entity_name} to {location_name} at ({x}, {y}, {z})"
+        return f"❌ Failed to move {entity_name} to {location_name}. Make sure the entity exists."
+    except Exception as exc:  # noqa: BLE001
+        return f"Error moving entity: {exc}"

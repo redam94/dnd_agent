@@ -33,6 +33,8 @@ from .spatial import (
     get_entities_in_range,
     generate_scene_description,
     connect_locations,
+    create_location,
+    move_entity_to_location,
 )
 from .campaign_storage import (
     save_campaign_info,
@@ -56,6 +58,8 @@ __all__ = [
     "get_entities_in_range",
     "generate_scene_description",
     "connect_locations",
+    "create_location",
+    "move_entity_to_location",
     # campaign storage
     "save_campaign_info",
     "search_campaign_info",
