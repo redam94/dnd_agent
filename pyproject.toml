@@ -25,6 +25,9 @@ dependencies = [
     "python-dotenv>=0.19.0",
     "rich>=13.0",
     "httpx>=0.24.0",
+    "pydantic-ai>=1.0.15",
+    "neo4j>=6.0.2",
+    "psycopg2-binary>=2.9.10",
 ]
 
 [project.optional-dependencies]
@@ -197,4 +200,9 @@ exclude = [
 ]
 per-file-ignores = [
     "__init__.py:F401",
+]
+
+[dependency-groups]
+server = [
+    "fastapi[standard]>=0.118.0",
 ]
