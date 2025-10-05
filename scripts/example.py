@@ -27,6 +27,8 @@ class CampaignDeps:
     postgres_conn: Optional[Any] = None
     dnd_api_base: str = "https://www.dnd5eapi.co"
     current_context: Optional[Dict[str, Any]] = None
+    campaign_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 def create_multiagent_system(
