@@ -35,6 +35,6 @@ class NarrativeAgent(BaseAgent):
             ),
             retries=2,
         )
-        agent.tool(generate_scene_description, name="describe_scene", description="Generate a rich description of a location including entities and exits.")
-        agent.tool(search_campaign_info, name="search_lore", description="Search saved campaign lore for relevant information.")
+        agent.tool(generate_scene_description, name="describe_scene")
+        agent.tool(search_campaign_info, name="search_lore")
         return agent

@@ -37,12 +37,17 @@ async def lookup_dnd_resource(
     :returns: A JSON formatted string describing the requested resource or an error message.
     """
     try:
+        
         client = DnD5eAPIClient(base_url=ctx.deps.dnd_api_base)
         if resource_index:
+            resource_index = resource_index.lower().replace(" ", "-")
             result = client.get_resource(resource_type, resource_index, params=filters)
         else:
             result = client.get_resource(resource_type, params=filters)
         client.close()
-        return json.dumps(result, indent=2, default=str)
+        result = json.dumps(result, indent=2, default=str)
+        
+        return result
     except Exception as exc:  # noqa: BLE001
+        print(f"Error looking up D&D resource: {exc}")
         return f"Error looking up D&D resource: {exc}"

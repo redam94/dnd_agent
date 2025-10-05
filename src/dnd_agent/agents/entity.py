@@ -41,9 +41,9 @@ class EntityAgent(BaseAgent):
             ),
             retries=2,
         )
-        agent.tool(store_campaign_entity, name="store_entity", description="Store a new entity in the graph.")
-        agent.tool(create_campaign_relationship, name="create_relationship", description="Create a relationship between two entities.")
-        agent.tool(query_campaign_graph, name="query_graph", description="Run a Cypher query against the graph.")
-        agent.tool(check_database_status, name="database_status", description="Summarise the contents of the graph database.")
-        agent.tool(list_entities_of_type, name="list_entities", description="List entities of a given type from the graph database.")
+        agent.tool(store_campaign_entity)
+        agent.tool(create_campaign_relationship)
+        agent.tool(query_campaign_graph)
+        agent.tool(check_database_status)
+        agent.tool(list_entities_of_type)
         return agent

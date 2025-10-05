@@ -110,7 +110,7 @@ class BaseAgent:
         and returned in the response as a failure.
         """
         try:
-            result = await self.agent.run(request.action, deps=self.deps, **request.parameters)
+            result = await self.agent.run(request.action + "\nParameters:\n" + str(request.parameters), deps=self.deps)
             message = getattr(result, "output", str(result))
             return AgentResponse(
                 agent_type=request.agent_type,

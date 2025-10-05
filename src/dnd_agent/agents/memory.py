@@ -35,7 +35,7 @@ class MemoryAgent(BaseAgent):
             ),
             retries=2,
         )
-        agent.tool(save_campaign_info, name="save_info", description="Save campaign information to the vector database.")
-        agent.tool(search_campaign_info, name="search_info", description="Search campaign information by semantic query.")
-        agent.tool(recall_chat_history, name="recall_chat", description="Retrieve or search chat history for a campaign.")
+        agent.tool(save_campaign_info, name="save_info")
+        agent.tool(search_campaign_info, name="search_info")
+        agent.tool(recall_chat_history, name="recall_chat")
         return agent

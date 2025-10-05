@@ -43,10 +43,10 @@ class SpatialAgent(BaseAgent):
             retries=2,
         )
         # Register spatial tools
-        agent.tool(create_map_location, name="create_map", description="Create a map with given dimensions and description.")
-        agent.tool(set_entity_position, name="set_position", description="Set the position of an entity on a map or location.")
-        agent.tool(calculate_distance, name="distance", description="Calculate the distance between two entities.")
-        agent.tool(get_entities_in_range, name="entities_in_range", description="List all entities within a given range of a central entity.")
-        agent.tool(generate_scene_description, name="describe_scene", description="Generate a detailed description of a location, including entities and exits.")
-        agent.tool(connect_locations, name="connect_locations", description="Create a connection between two locations.")
+        agent.tool(create_map_location)
+        agent.tool(set_entity_position)
+        agent.tool(calculate_distance)
+        agent.tool(get_entities_in_range)
+        agent.tool(generate_scene_description)
+        agent.tool(connect_locations)
         return agent

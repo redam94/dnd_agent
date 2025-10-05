@@ -70,7 +70,11 @@ class DMOrchestratorAgent(BaseAgent):
         agent = self.sub_agents.get(agent_type)
         if agent is None:
             return {"success": False, "data": None, "message": f"Unknown agent type: {agent_type}"}
-        request = AgentRequest(agent_type=agent_type, action=action, parameters=parameters, context=ctx.deps.current_context if hasattr(ctx.deps, "current_context") else None)
+        if ctx is not None:
+            
+            request = AgentRequest(agent_type=agent_type, action=action, parameters=parameters, context=ctx.deps.current_context if hasattr(ctx.deps, "current_context") else None)
+        else:
+            request = AgentRequest(agent_type=agent_type, action=action, parameters=parameters, context=None)
         response: AgentResponse = await agent.process(request)
         return {
             "success": response.success,

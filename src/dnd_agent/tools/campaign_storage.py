@@ -48,6 +48,7 @@ async def save_campaign_info(
         pg_manager.close()
         return f"✅ Saved campaign info (ID: {info_id}) - Type: {info_type}, Title: '{title}'"
     except Exception as exc:  # noqa: BLE001
+        print(f"Error saving campaign info: {exc}")
         return f"❌ Error saving campaign info: {exc}"
 
 
@@ -76,6 +77,7 @@ async def search_campaign_info(
             limit=limit,
         )
         pg_manager.close()
+        
         if not results:
             return f"No campaign info found matching: '{query}'"
         output_lines = [f"**Campaign Info Search Results** (Query: '{query}')"]
@@ -87,6 +89,7 @@ async def search_campaign_info(
             output_lines.append("")
         return "\n".join(output_lines)
     except Exception as exc:  # noqa: BLE001
+        print(f"Error searching campaign info: {exc}")
         return f"❌ Error searching campaign info: {exc}"
 
 
@@ -133,4 +136,5 @@ async def recall_chat_history(
             lines.append("")
         return "\n".join(lines)
     except Exception as exc:  # noqa: BLE001
+        print(f"Error retrieving chat history: {exc}")
         return f"❌ Error retrieving chat history: {exc}"

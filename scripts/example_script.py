@@ -25,7 +25,7 @@ class DummyDeps:
 
     def __init__(self):
         # Base URL for the open DnD 5e API. Adjust as needed.
-        self.dnd_api_base: str = "https://www.dnd5eapi.co/"
+        self.dnd_api_base: str = "https://www.dnd5eapi.co"
         # No PostgreSQL connection configured in this example.
         self.postgres_conn = None
         # Placeholder for campaign context. Can store session-specific data.
@@ -55,11 +55,12 @@ async def main() -> None:
     print("Spell lookup result:\n", spell_response.get("message"))
 
     # Example 2: Create a new character entity via the EntityAgent
+    print("Creating a new character entity...")
     entity_response = await orchestrator.delegate_to_agent(
         ctx=None,
         agent_type=AgentType.ENTITY,
         action="store_entity",
-        parameters={"entity_type": "Character", "name": "Valeros", "attributes": {"level": 1}},
+        parameters={"entity_type": "Character", "name": "Jar XIII", "attributes": {"level": 1}},
     )
     print("Entity creation result:\n", entity_response.get("message"))
 

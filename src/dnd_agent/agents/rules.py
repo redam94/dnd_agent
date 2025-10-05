@@ -39,7 +39,7 @@ class RulesAgent(BaseAgent):
             retries=2,
         )
         # Register relevant tools
-        agent.tool(lookup_dnd_resource, name="lookup_dnd_resource", description="Look up spells, monsters, items and classes.")
-        agent.tool(query_campaign_graph, name="query_graph", description="Execute a Cypher query on the campaign graph.")
-        agent.tool(list_entities_of_type, name="list_entities", description="List entities of a given type from the graph database.")
+        agent.tool(lookup_dnd_resource)
+        agent.tool(query_campaign_graph)
+        agent.tool(list_entities_of_type)
         return agent

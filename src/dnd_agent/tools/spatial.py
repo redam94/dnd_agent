@@ -20,6 +20,7 @@ from dnd_agent.models.agent_deps import CampaignDeps
 
 
 async def _create_neo4j_manager() -> Neo4jSpatialManager:
+    print("Creating Neo4jSpatialManager")
     return Neo4jSpatialManager(
         uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
         user=os.getenv("NEO4J_USER", "neo4j"),
@@ -39,13 +40,13 @@ async def create_map_location(
     """Create a new map node and associate it with a location entity."""
     try:
         manager = await _create_neo4j_manager()
-        success = manager.create_map_location(
+        success = manager.create_map(dict(
             map_id=map_id,
             map_name=map_name,
             description=description,
             grid_width=grid_width,
             grid_height=grid_height,
-            grid_size=grid_size,
+            grid_size=grid_size,)
         )
         manager.close()
         if success:
