@@ -1,9 +1,11 @@
-from typing import Tuple, List, Dict, Any
+from typing import Any, Dict, List, Tuple
 
 from pydantic import BaseModel, Field
 
+
 class Position(BaseModel):
     """Model for a position on a map"""
+
     x: float = Field(description="X coordinate")
     y: float = Field(description="Y coordinate")
     z: float = Field(default=0.0, description="Z coordinate (elevation)")
@@ -12,6 +14,7 @@ class Position(BaseModel):
 
 class MapLocation(BaseModel):
     """Model for a location with spatial properties"""
+
     name: str = Field(description="Name of the location")
     description: str = Field(description="Detailed description of the location")
     location_type: str = Field(description="Type (room, outdoor, dungeon, city, etc.)")
@@ -24,6 +27,7 @@ class MapLocation(BaseModel):
 
 class EntityPosition(BaseModel):
     """Model for tracking entity position"""
+
     entity_name: str
     entity_type: str
     position: Position
@@ -31,6 +35,7 @@ class EntityPosition(BaseModel):
 
 class BattleMap(BaseModel):
     """Model for a battle/tactical map"""
+
     map_id: str
     name: str
     description: str
