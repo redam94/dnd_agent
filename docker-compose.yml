@@ -1,0 +1,93 @@
+services:
+  # Neo4j Graph Database
+  # Used for storing campaign entities, relationships, and spatial data
+  neo4j:
+    image: neo4j:5.14.0
+    container_name: dnd_neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/H!ggsb0s0n
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+    networks:
+      - dnd_network
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "H!ggsb0s0n", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Database
+  # Used for vector storage and campaign memory features
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: dnd_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD="H!ggsb0s0n"
+      - POSTGRES_DB=dnd_campaign
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - dnd_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: pgAdmin for PostgreSQL management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: dnd_pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@dnd.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - dnd_network
+    depends_on:
+      - postgres
+
+volumes:
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  neo4j_import:
+    driver: local
+  neo4j_plugins:
+    driver: local
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  dnd_network:
+    driver: bridge
+
+# Usage:
+# 1. Start all services: docker-compose up -d
+# 2. View logs: docker-compose logs -f
+# 3. Stop services: docker-compose down
+# 4. Stop and remove volumes: docker-compose down -v
+#
+# Access points:
+# - Neo4j Browser: http://localhost:7474
+# - PostgreSQL: localhost:5432
+# - pgAdmin: http://localhost:5050
